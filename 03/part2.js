@@ -11,6 +11,7 @@ const gridPoints = {};
 input.forEach(claim => {
   const [_, id, x, y, width, height] = claim.match(/^#(\d+)\s@\s(\d+),(\d+):\s(\d+)x(\d+)$/);
   claims.push({
+    id: parseInt(id),
     x: parseInt(x),
     y: parseInt(y),
     width: parseInt(width),
@@ -27,9 +28,22 @@ const calculateGridItems = ({ x, y, width, height }) => {
   }
 };
 
-claims.forEach(calculateGridItems);
-const allPoints = Object.values(gridPoints);
-const overlappingPoints = allPoints.filter(count => count > 1);
+const hasOverlappingPoints = ({ id, x, y, width, height }) => {
+  for (let i = x; i < x + width; i++) {
+    for (let j = y; j < y + height; j++) {
+      const pointId = `${i},${j}`;
+      if (gridPoints[pointId] > 1) {
+        return { id, overlapping: true };
+      }
+    }
+  }
+  return { id, overlapping: false };
+};
 
-console.log(`There are ${allPoints.length} square inches of claims.`);
-console.log(`${overlappingPoints.length} square inches are overlapping.`);
+claims.forEach(calculateGridItems);
+
+const nonOverlappingClaims = claims
+  .map(hasOverlappingPoints)
+  .filter(({ overlapping }) => !overlapping);
+
+console.log(`The claim with no overlapping has an ID of ${nonOverlappingClaims[0].id}.`);
