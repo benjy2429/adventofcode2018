@@ -1,20 +1,18 @@
 const fs = require('fs');
 
 const FILE_NAME = './11/input';
-const MAX_X_COORDINATE = 300;
-const MAX_Y_COORDINATE = 300;
+const MAX_COORDINATE = 300;
 
 const input = fs.readFileSync(FILE_NAME, 'utf8');
 
 const state = {
   serialNumber: parseInt(input),
-  grid: {},
+  grid: [],
   highestPowerLevel: {
     power: 0,
     location: undefined
   },
-  storedTotals: {},
-  newTotals: {}
+  storedTotals: {}
 }
 
 const calculatePowerLevel = (x, y) => {
@@ -29,13 +27,10 @@ const calculatePowerLevel = (x, y) => {
 }
 
 const generateGrid = () => {
-  for (let i = 1; i <= MAX_X_COORDINATE; i++) {
-    for (let j = 1; j <= MAX_Y_COORDINATE; j++) {
-      state.grid[`${i},${j}`] = {
-        x: i,
-        y: j,
-        power: calculatePowerLevel(i, j)
-      }
+  for (let i = 1; i <= MAX_COORDINATE; i++) {
+    state.grid[i] = [];
+    for (let j = 1; j <= MAX_COORDINATE; j++) {
+      state.grid[i][j] = calculatePowerLevel(i, j);
     }
   }
 };
@@ -44,18 +39,20 @@ const calculateTotalPower = (x, y, size) => {
   let totalPower = state.storedTotals[`${x},${y},${size - 1}`] || 0;
 
   for (let n = 0; n < size; n++) {
-    const xToLook = `${x + n},${y + size - 1}`;
-    const yToLook = `${x + size - 1},${y + n}`;
+    const x1 = x + n;
+    const y1 = y + size - 1;
+    const x2 = x + size - 1;
+    const y2 = y + n;
 
-    totalPower += state.grid[xToLook].power;
-    if (xToLook !== yToLook) {
-      totalPower += state.grid[yToLook].power
+    totalPower += state.grid[x1][y1];
+    if (x1 !== x2 && y1 !== y2) {
+      totalPower += state.grid[x2][y2];
     }
   }
 
   delete state.storedTotals[`${x},${y},${size - 1}`] || 0;
 
-  if (x <= MAX_X_COORDINATE - size && y <= MAX_Y_COORDINATE - size) {
+  if (x <= MAX_COORDINATE - size && y <= MAX_COORDINATE - size) {
     state.storedTotals[`${x},${y},${size}`] = totalPower;
   }
 
@@ -63,9 +60,9 @@ const calculateTotalPower = (x, y, size) => {
 };
 
 const findLargestPowerBank = () => {
-  for (let size = 1; size <= MAX_X_COORDINATE; size++) {
-    for (let i = 1; i <= MAX_X_COORDINATE - size + 1; i++) {
-      for (let j = 1; j <= MAX_Y_COORDINATE - size + 1; j++) {
+  for (let size = 1; size <= MAX_COORDINATE; size++) {
+    for (let i = 1; i <= MAX_COORDINATE - size + 1; i++) {
+      for (let j = 1; j <= MAX_COORDINATE - size + 1; j++) {
         const totalPower = calculateTotalPower(i, j, size);
 
         if (totalPower > state.highestPowerLevel.power) {
