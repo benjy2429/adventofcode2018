@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-const FILE_NAME = './15/input.example2';
+const FILE_NAME = './15/input.example1';
 
 const SQUARE_TYPES = {
   WALL: '#',
@@ -12,7 +12,9 @@ const SQUARE_TYPES = {
 const state = {
   board: {},
   units: [],
-  turn: 0
+  turn: 0,
+  gameOver: false,
+  winningTeam: undefined
 };
 
 const parseInput = () => {
@@ -66,15 +68,20 @@ const printBoard = () => {
       return;
     }
 
-    currentRowOutput += state.units[square.unit].type;
+    // currentRowOutput += state.units[square.unit].type;
+    currentRowOutput += state.units[square.unit].id;
   });
 
   console.log(currentRowOutput);
   console.log();
 };
 
+const sortByReadingOrder = (a, b) => (
+  a.y - b.y || (a.x - b.x && (a.y - b.y === 0))
+)
+
 const sortByFAndReadingOrder = (a, b) => (
-  a.f - b.f || a.y - b.y || (a.x - b.x && (a.y - b.y === 0))
+  a.f - b.f || sortByReadingOrder(a, b)
 );
 
 const isUnitAlive = ({ hp }) => hp > 0;
@@ -213,10 +220,28 @@ const findAStarPath = (unit, destination) => {
   return;
 };
 
+const attack = targetSquares => {
+  const targets = targetSquares.map(square => state.units[square.unit]);
+  targets.sort((a, b) => a.hp - b.hp || sortByReadingOrder);
+  const [targetToAttack] = targets;
+
+  targetToAttack.hp = targetToAttack.hp - 3;
+
+  if (targetToAttack.hp <= 0) {
+    console.log('UNIT DIED!', targetToAttack);
+    state.board[`${targetToAttack.x},${targetToAttack.y}`].unit = undefined;
+  }
+};
+
 const performTurn = unit => {
+  if (isGameOver(state.units)) {
+    return;
+  }
+
   const adjacentTargets = getAdjacentTargets(unit);
 
   if (adjacentTargets.length) {
+    attack(adjacentTargets);
     return;
   }
 
@@ -250,8 +275,7 @@ const performTurn = unit => {
 
   // console.log(nextSteps);
 
-  const sortedNextSteps = nextSteps.sort(sortByFAndReadingOrder);
-  const bestNextStep = sortedNextSteps[0];
+  const [bestNextStep] = nextSteps.sort(sortByFAndReadingOrder);
 
   // console.log(sortedNextSteps[0]);
   // console.log(sortedNextSteps[1]);
@@ -268,6 +292,12 @@ const performTurn = unit => {
   // console.log(`AFTER UNIT ${unit.id} MOVE:`);
   // printBoard();
   // process.exit()
+
+  const newAdjacentTargets = getAdjacentTargets(unit);
+
+  if (newAdjacentTargets.length) {
+    attack(newAdjacentTargets);
+  }
 };
 
 const performRound = () => {
@@ -282,8 +312,22 @@ const performRound = () => {
 const isGameOver = units => {
   const remainingTypes = units.filter(isUnitAlive);
 
-  return remainingTypes.every(({ type }) => type === SQUARE_TYPES.ELF)
-    || remainingTypes.every(({ type }) => type === SQUARE_TYPES.GOBLIN);
+  const isOnlyElvesRemaining = remainingTypes.every(({ type }) => type === SQUARE_TYPES.ELF)
+  const isOnlyGoblinsRemaining = remainingTypes.every(({ type }) => type === SQUARE_TYPES.GOBLIN);
+
+  if (isOnlyElvesRemaining) {
+    state.gameOver = true;
+    state.winningTeam = SQUARE_TYPES.ELF;
+    return true;
+  }
+
+  if (isOnlyGoblinsRemaining) {
+    state.gameOver = true;
+    state.winningTeam = SQUARE_TYPES.GOBLIN;
+    return true;
+  }
+
+  return false;
 };
 
 const run = () => {
@@ -291,16 +335,36 @@ const run = () => {
   console.log('Initially:');
   printBoard();
 
-  while (!isGameOver(state.units) && state.turn < 4) {
+  while (
+    !state.gameOver
+    && state.turn < 25
+  ) {
     state.turn++;
     performRound();
-    console.log(`After ${state.turn} round(s):`);
+    console.log(`After ${state.turn} rounds:`);
     printBoard();
+    // console.log(state.units.filter(({hp}) => hp > 0));
   }
 
-  // const finalScores = state.scores.slice(state.targetRecipeCount, state.targetRecipeCount + USEFUL_RECIPE_COUNT);
 
-  // console.log(`The ${USEFUL_RECIPE_COUNT} recipe scores immediately after ${state.targetRecipeCount} recipes is ${finalScores.join('')}.`);
+  const totalRemainingHP = state.units.reduce(
+    (acc, { hp }) => hp > 0 ? acc + hp : acc,
+    0
+  );
+
+  const winningTeam = state.winningTeam === SQUARE_TYPES.ELF ? 'Elves' : 'Goblins';
+  const outcome = (state.turn - 1) * totalRemainingHP;
+
+  console.log(`Combat ends after ${state.turn - 1} full rounds`);
+  console.log(`${winningTeam} win with ${totalRemainingHP} total hit points left`);
+  console.log(`Outcome: ${state.turn - 1} * ${totalRemainingHP} = ${outcome}`);
 };
 
 run();
+
+/*
+==TODO==
+* Units not moving when next to unit of same type (ex1, 24th round, )
+* HP not going down on last round giving wrong outcome
+
+*/
