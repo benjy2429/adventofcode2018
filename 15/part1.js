@@ -1,6 +1,11 @@
+// Outcome: 59 * 3020 = 178180
+// TOO HIGH
+// Outcome: 59 * 3011 = 177649
+// TOO LOW
+
 const fs = require('fs');
 
-const FILE_NAME = './15/input.example1';
+const FILE_NAME = './15/input';
 
 const SQUARE_TYPES = {
   WALL: '#',
@@ -17,8 +22,8 @@ const state = {
   winningTeam: undefined
 };
 
-const parseInput = () => {
-  const input = fs.readFileSync(FILE_NAME, 'utf8');
+const parseInput = (file = FILE_NAME) => {
+  const input = fs.readFileSync(file, 'utf8');
 
   input.split("\n").forEach((row, y) => {
     row.split('').forEach((square, x) => {
@@ -47,6 +52,10 @@ const parseInput = () => {
   });
 };
 
+const getUnitById = id => (
+  state.units.find(unit => unit.id === id)
+)
+
 const printBoard = () => {
   let currentY = 0;
   let currentRowOutput = '';
@@ -68,8 +77,8 @@ const printBoard = () => {
       return;
     }
 
-    // currentRowOutput += state.units[square.unit].type;
-    currentRowOutput += state.units[square.unit].id;
+    currentRowOutput += getUnitById(square.unit).type;
+    // currentRowOutput += getUnitById(square.unit).id;
   });
 
   console.log(currentRowOutput);
@@ -77,8 +86,8 @@ const printBoard = () => {
 };
 
 const sortByReadingOrder = (a, b) => (
-  a.y - b.y || (a.x - b.x && (a.y - b.y === 0))
-)
+  a.y - b.y || a.x - b.x
+);
 
 const sortByFAndReadingOrder = (a, b) => (
   a.f - b.f || sortByReadingOrder(a, b)
@@ -107,7 +116,7 @@ const getAdjacentOpenSquares = square => (
 
 const getAdjacentTargets = square => (
   getAdjacentSquares(square).filter(
-    ({ unit }) => unit !== undefined && state.units[unit].type !== square.type
+    ({ unit }) => unit !== undefined && getUnitById(unit).type !== square.type
   )
 );
 
@@ -115,6 +124,7 @@ const calculateDistance = (point1, point2) =>
   Math.abs(point1.x - point2.x) + Math.abs(point1.y - point2.y);
 
 const findAStarPath = (unit, destination) => {
+  // console.log('DEST', destination);
   // g = distance between start and current
   // h = distance between current and end
   // f = g + h
@@ -181,7 +191,7 @@ const findAStarPath = (unit, destination) => {
     //   console.log(neighbours);
     // }
 
-    neighbours.forEach(neighbour => {
+    neighbours.forEach((neighbour, index) => {
       const neighbourInClosedSet = closedSet.find(
         square => square.x === neighbour.x && square.y === neighbour.y
       );
@@ -203,7 +213,14 @@ const findAStarPath = (unit, destination) => {
         // console.log('NOT IN OPEN SET');
         neighbour.h = h;
         openSet.push(neighbour);
-      } else if (g >= neighbour.g) {
+
+      } else if (g === neighbour.g) {
+        const [highestReadingOrder] = [neighbour, currentSquare].sort(sortByReadingOrder);
+
+        if (highestReadingOrder.x === currentSquare.x && highestReadingOrder.y === currentSquare.y) {
+          return;
+        }
+      } else if (g > neighbour.g) {
         // console.log('G SCORE WAS WORSE');
         return;
       }
@@ -221,14 +238,14 @@ const findAStarPath = (unit, destination) => {
 };
 
 const attack = targetSquares => {
-  const targets = targetSquares.map(square => state.units[square.unit]);
-  targets.sort((a, b) => a.hp - b.hp || sortByReadingOrder);
+  const targets = targetSquares.map(square => getUnitById(square.unit));
+  targets.sort((a, b) => a.hp - b.hp || sortByReadingOrder(a, b));
   const [targetToAttack] = targets;
 
   targetToAttack.hp = targetToAttack.hp - 3;
 
   if (targetToAttack.hp <= 0) {
-    console.log('UNIT DIED!', targetToAttack);
+    // console.log('UNIT DIED!', targetToAttack);
     state.board[`${targetToAttack.x},${targetToAttack.y}`].unit = undefined;
   }
 };
@@ -257,32 +274,26 @@ const performTurn = unit => {
 
   // console.log(destinations);
 
-  const nextSteps = destinations.map((dest, index) => {
-    const path = findAStarPath(unit, dest);
-    // console.log(path);
-    if (!path) {
-      return undefined;
-    }
+  const paths = destinations.map(dest => findAStarPath(unit, dest));
 
-    // process.exit()
+  // if (unit.id === 0) {
+  //   console.log('DEBUG');
+  //   console.log(targets);
+  //   console.log(destinations);
+  // }
 
-    return {
-      x: path[1].x,
-      y: path[1].y,
-      f: path[1].f
-    }
-  });
+  const [bestPath] = paths.sort((a, b) => a.length - b.length || sortByReadingOrder(a[a.length - 1], b[b.length - 1]));
 
-  // console.log(nextSteps);
-
-  const [bestNextStep] = nextSteps.sort(sortByFAndReadingOrder);
-
-  // console.log(sortedNextSteps[0]);
-  // console.log(sortedNextSteps[1]);
-
-  if (!bestNextStep) {
+  if (!bestPath) {
     return;
   }
+
+  const bestNextStep = bestPath[1];
+
+  // if (unit.id === 0) {
+  //   console.log(paths);
+  //   console.log(bestNextStep);
+  // }
 
   state.board[`${bestNextStep.x},${bestNextStep.y}`].unit = unit.id;
   state.board[`${unit.x},${unit.y}`].unit = undefined;
@@ -301,7 +312,7 @@ const performTurn = unit => {
 };
 
 const performRound = () => {
-  state.units.forEach(unit => {
+  state.units.sort(sortByReadingOrder).forEach(unit => {
     if (!isUnitAlive(unit)) {
       return;
     }
@@ -330,14 +341,20 @@ const isGameOver = units => {
   return false;
 };
 
-const run = () => {
-  parseInput();
+const run = input => {
+  state.board = {},
+  state.units = [],
+  state.turn = 0,
+  state.gameOver = false,
+  state.winningTeam = undefined
+
+  parseInput(input);
   console.log('Initially:');
   printBoard();
 
   while (
     !state.gameOver
-    && state.turn < 25
+    // && state.turn < 25
   ) {
     state.turn++;
     performRound();
@@ -358,13 +375,15 @@ const run = () => {
   console.log(`Combat ends after ${state.turn - 1} full rounds`);
   console.log(`${winningTeam} win with ${totalRemainingHP} total hit points left`);
   console.log(`Outcome: ${state.turn - 1} * ${totalRemainingHP} = ${outcome}`);
+
+  return outcome;
 };
 
-run();
+// run();
+module.exports = run;
 
 /*
 ==TODO==
-* Units not moving when next to unit of same type (ex1, 24th round, )
+* Units not moving in reading order (ex1, 24-25th round, id0)
 * HP not going down on last round giving wrong outcome
-
 */
